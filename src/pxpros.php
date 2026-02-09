@@ -44,7 +44,7 @@ succeed($files);
 final class PXPros
 {
 
-    const SEED_FILE = 'pxpros.json';
+    const SEED_FILE = '_pxpros.json';
 
     private $root;
     private $file;
@@ -140,11 +140,25 @@ final class PXPros
         $this->file = realpath($file);
         $this->plugins = [];
         $this->processHook('pre_render', file_get_contents($file));
+        
         ob_start();
 		if ($this->before) include(realpath($this->root . $this->before));
+        $header = ob_get_clean();
+        
+        ob_start();
         include($file);
+        $body = ob_get_clean();
+        if($this->indent) {
+            $body = join(PHP_EOL, array_map(function($line) {
+                return str_repeat(' ', $this->indent) . $line;
+            }, explode(PHP_EOL, $body)));
+        }
+        
+        ob_start();
         if ($this->after) include(realpath($this->root . $this->after));
-        $contents = ob_get_clean();
+        $footer = ob_get_clean();
+        
+        $contents = $header . $body . $footer;
         $contents = $this->processTags($contents);
         $contents = $this->processHook('post_render', $contents);
         file_put_contents($target, $contents);
