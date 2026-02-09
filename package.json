@@ -1,0 +1,24 @@
+{
+  "name": "pxpros",
+  "version": "1.0.1",
+  "description": "PHP Renderer for Static Website",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "src/"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ZmotriN/pxpros.git"
+  },
+  "keywords": ["PHP", "template", "static"],
+  "author": "",
+  "license": "MIT",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/ZmotriN/pxpros/issues"
+  },
+  "homepage": "https://github.com/ZmotriN/pxpros#readme"
+}

@@ -1,1 +1,0 @@
-@php "%~dp0pxpros.php" %1
