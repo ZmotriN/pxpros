@@ -1,10 +1,13 @@
+// const fs = require("fs");
 const path = require('path');
 const { exec } = require('child_process')
 
 
-const render = async (file) => {
+
+
+const run = async (args) => {
 	return new Promise(resolve => {
-		exec(`php -d display_errors=1 -d log_errors=1 -d error_log=php://stderr -d html_errors=0 -d error_reporting=32767 "${path.join(__dirname, 'pxpros.php')}" "${file}"`, (error, stdout, stderr) => {
+		exec(`php -d display_errors=1 -d log_errors=1 -d error_log=php://stderr -d html_errors=0 -d error_reporting=32767 "${path.join(__dirname, 'pxpros.php')}" ${args}`, (error, stdout, stderr) => {
 			if (error) {
 				const errstr = stdout.trim() || stderr.trim() || `${error}`.trim();
 				try { errobj = JSON.parse(errstr); }
@@ -20,4 +23,29 @@ const render = async (file) => {
 }
 
 
+const render = async (file) => {
+	return run(`"${file}"`);
+	// return new Promise(resolve => {
+	// 	exec(`php -d display_errors=1 -d log_errors=1 -d error_log=php://stderr -d html_errors=0 -d error_reporting=32767 "${path.join(__dirname, 'pxpros.php')}" "${file}"`, (error, stdout, stderr) => {
+	// 		if (error) {
+	// 			const errstr = stdout.trim() || stderr.trim() || `${error}`.trim();
+	// 			try { errobj = JSON.parse(errstr); }
+	// 			catch(e) { errobj = { success: false, error: errstr }; }
+	// 			resolve(errobj);
+	// 		} else {
+	// 			try { retobj = JSON.parse(stdout); }
+	// 			catch(e) { retobj = { success: false, error: "Response parsing error." }; }
+	// 			resolve(retobj);
+	// 		}
+	// 	});
+	// });
+}
+
+
+const sitemap = async (dir) => {
+	return run(`sitemap "${dir}"`);
+
+}
+
 module.exports.render = render;
+module.exports.sitemap = sitemap;

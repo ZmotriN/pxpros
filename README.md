@@ -5,3 +5,8 @@ PHP Renderer for Static Website
 ```bash
 npm i pxpros
 ```
+
+## Changelog
+
+### Version 1.0.3
+- Add a sitemap creation function 

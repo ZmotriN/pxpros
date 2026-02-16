@@ -6,12 +6,23 @@ const S = '/';
 const R = "\r";
 const N = "\n";
 
+ini_set('display_errors', 1);
+error_reporting(E_ALL);
 
 try {
     $PAGE = null;
 	$files = [];
 
     if (!isset($argv[1])) error("Invalid argument.");
+
+    if($argv[1] == 'sitemap') {
+        if(!$target = realpath($argv[2])) error("Invalid target.");
+        if (!$seed = PXPros::findSeed($target)) error("No project configuration found.");
+        $prj = new PXPros($seed);
+        if(!$files[] = $prj->sitemap()) error("Can't produce the sitemap.");
+        succeed($files);
+    }
+
     if (!$target = realpath($argv[1])) error("Invalid target.");
 
     if (is_dir($target)) {
@@ -222,6 +233,47 @@ final class PXPros
             }
         }
         return $data;
+    }
+
+
+    /**
+     * Method sitemap
+     *
+     * @return void
+     */
+    public function sitemap()
+    {
+        $paths = [];
+        $root = realpath($this->root);
+        foreach (dig($root . '/_*.php') as $file) {
+            $parent = pathinfo(pathinfo($file, PATHINFO_DIRNAME), PATHINFO_BASENAME);
+            if (strpos($parent, '_') === 0) continue;
+            if (strpos(pathinfo($file, PATHINFO_FILENAME), '_') !== 0) continue;
+            $paths[] = str_replace('\\', '/', ltrim(str_replace($root, '', pathinfo(realpath($file), PATHINFO_DIRNAME)), DIRECTORY_SEPARATOR));
+        }
+        if(empty($paths)) $paths[] = '';
+
+        $dom = new DOMDocument('1.0', 'UTF-8');
+        $dom->formatOutput = true;
+        $urlset = $dom->createElementNS('http://www.sitemaps.org/schemas/sitemap/0.9', 'urlset');
+        $dom->appendChild($urlset);
+
+        foreach($paths as $path) {
+            $deep = $path ? count(explode('/', $path)) : 0;
+            $priority = sprintf('%0.1f', (10 - $deep) / 10);
+            $url = $this->baseurl . ($path ? $path . '/' : '');
+
+            $durl = $dom->createElement('url');
+            $urlset->appendChild($durl);
+
+            $durl->appendChild($dom->createElement('loc', $url));
+            $durl->appendChild($dom->createElement('changefreq', 'monthly'));
+            $durl->appendChild($dom->createElement('priority', $priority));
+        }
+
+        $dest = $this->root . 'sitemap.xml';
+        file_put_contents($dest, $dom->saveXML());
+        return realpath($dest);
     }
 
 
