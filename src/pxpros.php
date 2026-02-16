@@ -245,7 +245,7 @@ final class PXPros
     {
         $paths = [];
         $root = realpath($this->root);
-        foreach (dig($root . '/_*.php') as $file) {
+        foreach (dig($root . '/_index.php') as $file) {
             $parent = pathinfo(pathinfo($file, PATHINFO_DIRNAME), PATHINFO_BASENAME);
             if (strpos($parent, '_') === 0) continue;
             if (strpos(pathinfo($file, PATHINFO_FILENAME), '_') !== 0) continue;
@@ -267,7 +267,8 @@ final class PXPros
             $urlset->appendChild($durl);
 
             $durl->appendChild($dom->createElement('loc', $url));
-            $durl->appendChild($dom->createElement('changefreq', 'monthly'));
+            $durl->appendChild($dom->createElement('lastmod', date('Y-m-d')));
+            $durl->appendChild($dom->createElement('changefreq', 'weekly'));
             $durl->appendChild($dom->createElement('priority', $priority));
         }
 
