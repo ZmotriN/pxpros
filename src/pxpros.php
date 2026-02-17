@@ -9,6 +9,8 @@ const N = "\n";
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
 
+include(__DIR__ . '/libraries/timezone.php');
+
 try {
     $PAGE = null;
 	$files = [];
