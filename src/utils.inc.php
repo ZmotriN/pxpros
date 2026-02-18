@@ -12,6 +12,8 @@ spl_autoload_register(function ($class) {
         'CACHE'           => 'cache.class.php',
         'DATE'            => 'date.class.php',
 		'FS'              => 'fs.class.php',
+        'IMG'             => 'img.class.php',
+        'OBF'             => 'obf.class.php',
 		'PXPROS'          => 'pxpros.class.php',
 		'STD'             => 'std.class.php',
         'STR'             => 'str.class.php',

@@ -8,6 +8,12 @@ npm i pxpros
 
 ## Changelog
 
+### Version 1.1.3
+- Add features: Image, Obfuscation and some file system changes
+  
+### Version 1.1.2
+- Bug fix: remove trailing print_f
+
 ### Version 1.1.1
 - Bug fix: ignore UTC timezone from default configuration
 

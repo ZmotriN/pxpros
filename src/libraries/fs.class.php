@@ -72,4 +72,31 @@ class FS {
 	}
 
 
+	public static function rmdir(string $dir, bool $removeSelf = true): bool
+	{
+		if (!file_exists($dir)) return true;
+
+		// Si c'est un fichier ou un lien, on unlink (et removeSelf n'a pas vraiment de sens ici)
+		if (is_file($dir) || is_link($dir)) {
+			return @unlink($dir);
+		}
+
+		$items = @scandir($dir);
+		if ($items === false) return false;
+
+		foreach ($items as $item) {
+			if ($item === '.' || $item === '..') continue;
+
+			$path = $dir . DIRECTORY_SEPARATOR . $item;
+
+			// Important: si c'est un symlink, on le traite comme un fichier (on ne descend pas dedans)
+			if (is_dir($path) && !is_link($path)) {
+				if (!call_user_func(__METHOD__, $path, true)) return false; // on supprime toujours les sous-dossiers eux-mêmes
+			} else {
+				if (!@unlink($path)) return false;
+			}
+		}
+
+		return $removeSelf ? @rmdir($dir) : true;
+	}
 }
