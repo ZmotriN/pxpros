@@ -8,11 +8,14 @@ npm i pxpros
 
 ## Changelog
 
+### Version 1.1.1
+- Bug fix: ignore UTC timezone from default configuration
+
 ### Version 1.1.0
 - Complete refactor
 
 ### Version 1.0.5
-- Sset php default timezone to local
+- Set php default timezone to local
 
 ### Version 1.0.4
 - Sitemap: change changefreq to weekly

@@ -6,7 +6,7 @@ error_reporting(E_ALL);
 
 try {
     include(__DIR__ . '/utils.inc.php');
-    DATE::setDefaultTimezone();
+    print_r(DATE::setDefaultTimezone());
     
 	$files = [];
 

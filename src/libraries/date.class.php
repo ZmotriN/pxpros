@@ -12,6 +12,14 @@ class DATE {
 			return $tz !== '' && in_array($tz, $idents, true);
 		};
 
+		$isPlaceholderUTC = function (?string $tz): bool {
+			if (!$tz) return true;
+			$tz = trim($tz);
+			if ($tz === '') return true;
+			// Considère ces valeurs comme "placeholder / default"
+			return in_array($tz, ['UTC', 'Etc/UTC', 'GMT', 'Etc/GMT'], true);
+		};
+
 		$apply = function (string $tz, string $source) use ($isValidTz): ?array {
 			$tz = trim($tz);
 			if (!$isValidTz($tz)) return null;
@@ -30,12 +38,62 @@ class DATE {
 			return $out === '' ? null : $out;
 		};
 
-		// 1) PHP ini timezone
-		if ($res = $apply((string)ini_get('date.timezone'), 'php.ini (date.timezone)')) return $res;
+		/**
+		 * Try to load COM extension on Windows if COM class is missing.
+		 * - Prefer com_dotnet (typical on Windows).
+		 * - Gracefully do nothing if dl() is unavailable or disabled.
+		 */
+		$ensureWindowsCom = function (): bool {
+			if (PHP_OS_FAMILY !== 'Windows') return false;
 
-		// 2) TZ env var
+			// If COM already available, done.
+			if (class_exists('COM', false)) return true;
+
+			// If extension is loaded, COM class should exist (but check anyway).
+			if (extension_loaded('com_dotnet') || extension_loaded('com')) {
+				return class_exists('COM', false);
+			}
+
+			// Try dl() if available (often disabled / unavailable)
+			if (!function_exists('dl')) return false;
+
+			// dl() may be disabled via disable_functions
+			$disabled = ini_get('disable_functions');
+			if (is_string($disabled) && $disabled !== '') {
+				$list = array_map('trim', explode(',', $disabled));
+				if (in_array('dl', $list, true)) return false;
+			}
+
+			// Candidates (Windows usually wants dll name)
+			$candidates = [
+				'php_com_dotnet.dll',
+				'com_dotnet',
+				'php_com.dll',
+				'com',
+			];
+
+			foreach ($candidates as $ext) {
+				try {
+					@dl($ext);
+					if (class_exists('COM', false)) return true;
+				} catch (\Throwable $e) {
+					// ignore
+				}
+			}
+
+			return class_exists('COM', false);
+		};
+
+		// 1) TZ env var (si tu le veux prioritaire)
 		$envTZ = getenv('TZ');
 		if ($res = $apply(is_string($envTZ) ? $envTZ : '', 'env TZ')) return $res;
+
+		// 2) PHP ini timezone (MAIS: ignore si placeholder UTC/GMT)
+		$iniTz = (string)ini_get('date.timezone');
+		if (!$isPlaceholderUTC($iniTz)) {
+			if ($res = $apply($iniTz, 'php.ini (date.timezone)')) return $res;
+		}
+		// sinon: on continue vers l’OS (Option B)
 
 		// OS-specific
 		if (PHP_OS_FAMILY === 'Windows') {
@@ -87,37 +145,32 @@ class DATE {
 			};
 
 			$guessFromOffset = function (int $offsetSeconds, bool $isDst): ?string {
-				// timezone_name_from_abbr expects offset in seconds EAST of UTC? Actually it uses seconds from UTC.
-				// Example: Montreal in winter is -18000.
 				$tz = @timezone_name_from_abbr('', $offsetSeconds, $isDst ? 1 : 0);
 				return is_string($tz) && $tz !== '' ? $tz : null;
 			};
 
 			// 3) Windows COM/WMI (best on Windows when enabled)
 			$winId = null;
-			$biasMinutes = null;         // minutes WEST of UTC
-			// $daylightBiasMinutes = null; // minutes added during DST (usually -60)
+			$biasMinutes = null; // minutes WEST of UTC
 			$supportsDst = null;
 
-			if (class_exists('COM')) {
+			$hasCom = $ensureWindowsCom();
+
+			if ($hasCom && class_exists('COM', false)) {
 				try {
 					$wmi = new COM('WbemScripting.SWbemLocator');
 					$svc = $wmi->ConnectServer('.', 'root\\cimv2');
 					$items = $svc->ExecQuery('SELECT * FROM Win32_TimeZone');
 					foreach ($items as $tz) {
-						// Prefer TimeZoneKeyName when available (e.g., "Eastern Standard Time")
 						if (!empty($tz->TimeZoneKeyName)) $winId = (string)$tz->TimeZoneKeyName;
 						elseif (!empty($tz->StandardName)) $winId = (string)$tz->StandardName;
 
 						if (isset($tz->Bias)) $biasMinutes = (int)$tz->Bias;
-						// if (isset($tz->DaylightBias)) $daylightBiasMinutes = (int)$tz->DaylightBias;
-						// Not always provided directly; but we can infer "supports DST" if DaylightName exists
 						$supportsDst = !empty($tz->DaylightName);
-
 						break;
 					}
 				} catch (\Throwable $e) {
-					// ignore and continue to other methods
+					// ignore and continue
 				}
 			}
 
@@ -127,9 +180,7 @@ class DATE {
 
 			// 4) If mapping failed, try offset-based guess
 			if ($biasMinutes !== null) {
-				// Windows Bias is minutes WEST of UTC, so offsetSeconds = -(biasMinutes*60)
-				$isDstNow = (bool)date('I'); // uses current PHP default tz (maybe UTC) -> unreliable, but still a hint
-				// Better DST hint: if supportsDst known, use current date rules later; keep simple here
+				$isDstNow = (bool)date('I'); // hint only (may be wrong if default tz is still UTC)
 				$offsetSeconds = -($biasMinutes * 60);
 				if ($tzGuess = $guessFromOffset($offsetSeconds, $supportsDst ? $isDstNow : false)) {
 					if ($res = $apply($tzGuess, 'windows COM/WMI bias -> timezone_name_from_abbr')) return $res;
@@ -151,7 +202,6 @@ class DATE {
 			// 7) wmic (older systems)
 			$wmic = $run('wmic timezone get StandardName /value');
 			if ($wmic) {
-				// parse "StandardName=Eastern Standard Time"
 				if (preg_match('/StandardName\s*=\s*(.+)\s*$/mi', $wmic, $m)) {
 					$wmicId = trim($m[1]);
 					if ($iana = $mapWin($wmicId)) {
@@ -165,6 +215,7 @@ class DATE {
 			return ['timezone' => 'UTC', 'source' => 'fallback UTC (windows)'];
 
 		} else {
+
 			// 3) Linux/macOS: /etc/timezone
 			$etcTz = '/etc/timezone';
 			if (is_file($etcTz)) {
@@ -197,6 +248,4 @@ class DATE {
 			return ['timezone' => 'UTC', 'source' => 'fallback UTC (unix)'];
 		}
 	}
-
-
 }
