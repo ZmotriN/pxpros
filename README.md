@@ -8,6 +8,9 @@ npm i pxpros
 
 ## Changelog
 
+### version 2.0.0
+- Change required PHP Cli to PHP-WASM package
+
 ### Version 1.1.3
 - Add features: Image, Obfuscation and some file system changes
   

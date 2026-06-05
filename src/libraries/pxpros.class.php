@@ -88,7 +88,7 @@ final class PXPROS
      * Render a page
      *
      * @param  mixed $file File to render
-     * @return void
+     * @return array
      */
     public function render($file)
     {
@@ -104,7 +104,7 @@ final class PXPROS
         $this->processHook('pre_render', file_get_contents($file));
         
         ob_start();
-		if ($this->before) include(realpath($this->root . $this->before));
+        if ($this->before) include(realpath($this->root . $this->before));
         $header = ob_get_clean();
         
         ob_start();
@@ -190,7 +190,7 @@ final class PXPROS
     /**
      * Method sitemap
      *
-     * @return void
+     * @return array
      */
     public function sitemap()
     {
@@ -212,7 +212,7 @@ final class PXPROS
         foreach($paths as $path) {
             $deep = $path ? count(explode('/', $path)) : 0;
             $priority = sprintf('%0.1f', (10 - $deep) / 10);
-            $url = $this->baseurl . ($path ? $path . '/' : '');
+            $url = rtrim($this->baseurl, '/') . '/' . ltrim(($path ? $path . '/' : ''), '/');
 
             $durl = $dom->createElement('url');
             $urlset->appendChild($durl);

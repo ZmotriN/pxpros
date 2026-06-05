@@ -1,1 +1,3 @@
-module.exports = require("./src/pxpros");
+import { render, sitemap } from "./src/pxpros.js";
+
+export { render, sitemap };
