@@ -18,6 +18,7 @@ spl_autoload_register(function ($class) {
 		'STD'             => 'std.class.php',
         'STR'             => 'str.class.php',
         'SYS'             => 'sys.class.php',
+        'YAML'            => 'yaml.class.php',
     ];
     if (isset($catalog[$class])) require_once(__DIR__ . '/libraries/' . $catalog[$class]);
 }, true, true);

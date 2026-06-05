@@ -8,6 +8,9 @@ npm i pxpros
 
 ## Changelog
 
+### version 2.0.1
+- Add YAML support for PHP
+
 ### version 2.0.0
 - Change required PHP Cli to PHP-WASM package
 

@@ -110,7 +110,7 @@ class IMG
 	{
 		$ext = strtolower(pathinfo($dest, PATHINFO_EXTENSION));
 		$dir = pathinfo($dest, PATHINFO_DIRNAME);
-		if (!is_dir($dir) && @mkdir($dir, 0777, true)) throw new Exception("Invalid destination.");
+		if (!is_dir($dir) && !@mkdir($dir, 0777, true)) throw new Exception("Invalid destination.");
 		match ($ext) {
 			'jpg', 'jpeg' => imagejpeg($this->im, $dest, 85),
 			'png'         => imagepng($this->im, $dest, 6),
