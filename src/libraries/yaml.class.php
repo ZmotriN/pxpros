@@ -168,51 +168,20 @@ class YAML
                     $result[] = null;
                 }
             } elseif (self::isMapping($itemContent)) {
-                // Mapping inline dans la séquence : on délègue à parseMapping
-                // en repositionnant $pos sur une ligne virtuelle reconstituée
-                $fakeIndent = $lineIndent + 2;
-                $inlineMap  = [];
-                [$k, $v]    = self::splitKeyValue($itemContent);
-                if ($v !== null) {
-                    $inlineMap[$k] = self::parseScalar(
-                        self::collectPlainScalar($lines, $pos, $lineIndent, $v)
-                    );
-                } else {
-                    $inlineMap[$k] = null;
-                }
-
-                while ($pos < count($lines)) {
-                    self::skipEmptyAndComments($lines, $pos);
-                    if ($pos >= count($lines)) break;
-                    $nl = $lines[$pos];
-                    $ni = self::getIndent($nl);
-                    $nt = ltrim($nl);
-                    if ($ni < $fakeIndent) break;
-                    if (!self::isMapping($nt)) break;
-                    [$mk, $mv] = self::splitKeyValue($nt);
-                    $pos++;
-                    if ($mv !== null) {
-                        $inlineMap[$mk] = self::parseScalar(
-                            self::collectPlainScalar($lines, $pos, $ni, $mv)
-                        );
-                    } else {
-                        // Valeur sur lignes suivantes
-                        self::skipEmptyAndComments($lines, $pos);
-                        if ($pos < count($lines) && self::getIndent($lines[$pos]) > $ni) {
-                            $nt2 = ltrim($lines[$pos]);
-                            if (!self::isMapping($nt2) && !str_starts_with($nt2, '- ')) {
-                                $inlineMap[$mk] = self::parseScalar(
-                                    self::collectPlainScalar($lines, $pos, $ni, '')
-                                );
-                            } else {
-                                $inlineMap[$mk] = self::parseBlock($lines, $pos, self::getIndent($lines[$pos]), $assoc);
-                            }
-                        } else {
-                            $inlineMap[$mk] = null;
-                        }
-                    }
-                }
-                $result[] = $assoc ? $inlineMap : (object) $inlineMap;
+                // Mapping inline dans la séquence :
+                // On reconstruit un tableau de lignes virtuel en préfixant la première clé
+                // avec fakeIndent, puis on délègue entièrement à parseMapping pour bénéficier
+                // de toute sa logique (|, >, plain scalars, sous-blocs…).
+                $fakeIndent   = $lineIndent + 2;
+                $fakePrefix   = str_repeat(' ', $fakeIndent);
+                $virtualLines = array_merge(
+                    [$fakePrefix . $itemContent],
+                    array_slice($lines, $pos)
+                );
+                $vPos    = 0;
+                $itemMap = self::parseMapping($virtualLines, $vPos, $fakeIndent, $assoc);
+                $pos    += max(0, $vPos - 1);
+                $result[] = $itemMap;
             } elseif ($itemContent[0] === '[' || $itemContent[0] === '{') {
                 $result[] = self::parseInlineCollection($itemContent, $assoc);
             } else {
