@@ -20,7 +20,7 @@ class FS {
 	}
 
 
-	public static function getRelativePath($from, $to)
+	public static function getRelativePath(string $from, string $to)
 	{
 		$from     = is_dir($from) ? rtrim($from, '\/') . '/' : $from;
 		$to       = is_dir($to)   ? rtrim($to, '\/') . '/'   : $to;
@@ -48,7 +48,7 @@ class FS {
 	}
 
 
-	public static function phpFileInfo($file)
+	public static function phpFileInfo(string $file)
 	{
 		static $files = [];
 		if (!$file = realpath($file)) return false;
@@ -64,6 +64,7 @@ class FS {
 			if (empty($block)) return new stdClass;
 			if (!preg_match_all('#@([a-z0-9]+)[\s\t]+([^\n]+)#msi', $block, $m)) $files[$file] = new stdClass;
 			else {
+				$info = [];
 				foreach ($m[1] as $k => $v) $info[trim($v)] = trim($m[2][$k]);
 				$files[$file] = (object)$info;
 			}

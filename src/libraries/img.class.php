@@ -10,7 +10,7 @@ class IMG
 	private $info = null;
 
 
-	public function __construct($file)
+	public function __construct(string $file)
 	{
 		if (!is_file($file) || !is_readable($file)) throw new Exception("Source file unreadable.");
 
@@ -89,7 +89,7 @@ class IMG
 	}
 
 
-	private function prepare($x, $y): GdImage
+	private function prepare(int $x, int $y): GdImage
 	{
 		$img = imagecreatetruecolor($x, $y);
 		$hasAlpha = in_array($this->info[2], [IMAGETYPE_PNG, IMAGETYPE_WEBP, IMAGETYPE_GIF], true);

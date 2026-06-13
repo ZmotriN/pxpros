@@ -12,6 +12,7 @@
  *  - Scalaires typés (string, int, float, bool, null)
  *  - Guillemets simples et doubles (avec séquences d'échappement)
  *  - Blocs multi-lignes (| littéral et > replié, avec chomping -, +)
+ *  - Plain scalars multi-lignes (continuation sans indicateur)
  *  - Mappings et séquences imbriqués
  *  - Collections inline [a, b] et {k: v}
  *  - Commentaires (#)
@@ -19,21 +20,12 @@
  */
 class YAML
 {
-    // Constructeur privé : classe non instanciable
     private function __construct() {}
 
     // -------------------------------------------------------------------------
     // Points d'entrée publics
     // -------------------------------------------------------------------------
 
-    /**
-     * Parse une chaîne YAML.
-     * Par défaut, les mappings sont retournés en stdClass (comme json_decode).
-     * Passer $assoc = true pour obtenir des tableaux associatifs.
-     * Si le YAML contient plusieurs documents (---), retourne un tableau de résultats.
-     *
-     * @throws \RuntimeException en cas d'erreur de syntaxe
-     */
     public static function parse(string $yaml, bool $assoc = false): mixed
     {
         $yaml  = str_replace(["\r\n", "\r"], "\n", $yaml);
@@ -44,7 +36,6 @@ class YAML
 
         while ($pos < count($lines)) {
             $line = $lines[$pos];
-
             if (preg_match('/^---/', $line)) { $pos++; continue; }
             if (preg_match('/^\.\.\./', $line)) { $pos++; break; }
 
@@ -55,11 +46,6 @@ class YAML
         return count($documents) === 1 ? $documents[0] : $documents;
     }
 
-    /**
-     * Parse un fichier YAML.
-     *
-     * @throws \RuntimeException si le fichier est illisible
-     */
     public static function parseFile(string $path, bool $assoc = false): mixed
     {
         if (!is_readable($path)) {
@@ -69,7 +55,7 @@ class YAML
     }
 
     // -------------------------------------------------------------------------
-    // Parsing récursif  ($pos passé par référence)
+    // Parsing récursif
     // -------------------------------------------------------------------------
 
     private static function parseBlock(array $lines, int &$pos, int $indent, bool $assoc = false): mixed
@@ -114,12 +100,23 @@ class YAML
             $pos++;
 
             if ($rest === null) {
+                // Valeur sur les lignes suivantes : sous-bloc ou plain scalar multi-ligne
                 self::skipEmptyAndComments($lines, $pos);
                 if ($pos < count($lines)) {
                     $nextIndent = self::getIndent($lines[$pos]);
-                    $result[$key] = $nextIndent > $indent
-                        ? self::parseBlock($lines, $pos, $nextIndent, $assoc)
-                        : null;
+                    if ($nextIndent > $indent) {
+                        $nextTrimmed = ltrim($lines[$pos]);
+                        // Plain scalar si ce n'est ni un mapping ni une séquence
+                        if (!self::isMapping($nextTrimmed) && !str_starts_with($nextTrimmed, '- ')) {
+                            $result[$key] = self::parseScalar(
+                                self::collectPlainScalar($lines, $pos, $indent, '')
+                            );
+                        } else {
+                            $result[$key] = self::parseBlock($lines, $pos, $nextIndent, $assoc);
+                        }
+                    } else {
+                        $result[$key] = null;
+                    }
                 } else {
                     $result[$key] = null;
                 }
@@ -130,7 +127,10 @@ class YAML
             } elseif ($rest !== '' && ($rest[0] === '[' || $rest[0] === '{')) {
                 $result[$key] = self::parseInlineCollection($rest, $assoc);
             } else {
-                $result[$key] = self::parseScalar($rest);
+                // Scalaire inline, peut être suivi de lignes de continuation
+                $result[$key] = self::parseScalar(
+                    self::collectPlainScalar($lines, $pos, $indent, $rest)
+                );
             }
         }
 
@@ -168,10 +168,18 @@ class YAML
                     $result[] = null;
                 }
             } elseif (self::isMapping($itemContent)) {
+                // Mapping inline dans la séquence : on délègue à parseMapping
+                // en repositionnant $pos sur une ligne virtuelle reconstituée
                 $fakeIndent = $lineIndent + 2;
                 $inlineMap  = [];
                 [$k, $v]    = self::splitKeyValue($itemContent);
-                $inlineMap[$k] = $v !== null ? self::parseScalar($v) : null;
+                if ($v !== null) {
+                    $inlineMap[$k] = self::parseScalar(
+                        self::collectPlainScalar($lines, $pos, $lineIndent, $v)
+                    );
+                } else {
+                    $inlineMap[$k] = null;
+                }
 
                 while ($pos < count($lines)) {
                     self::skipEmptyAndComments($lines, $pos);
@@ -183,7 +191,26 @@ class YAML
                     if (!self::isMapping($nt)) break;
                     [$mk, $mv] = self::splitKeyValue($nt);
                     $pos++;
-                    $inlineMap[$mk] = $mv !== null ? self::parseScalar($mv) : null;
+                    if ($mv !== null) {
+                        $inlineMap[$mk] = self::parseScalar(
+                            self::collectPlainScalar($lines, $pos, $ni, $mv)
+                        );
+                    } else {
+                        // Valeur sur lignes suivantes
+                        self::skipEmptyAndComments($lines, $pos);
+                        if ($pos < count($lines) && self::getIndent($lines[$pos]) > $ni) {
+                            $nt2 = ltrim($lines[$pos]);
+                            if (!self::isMapping($nt2) && !str_starts_with($nt2, '- ')) {
+                                $inlineMap[$mk] = self::parseScalar(
+                                    self::collectPlainScalar($lines, $pos, $ni, '')
+                                );
+                            } else {
+                                $inlineMap[$mk] = self::parseBlock($lines, $pos, self::getIndent($lines[$pos]), $assoc);
+                            }
+                        } else {
+                            $inlineMap[$mk] = null;
+                        }
+                    }
                 }
                 $result[] = $assoc ? $inlineMap : (object) $inlineMap;
             } elseif ($itemContent[0] === '[' || $itemContent[0] === '{') {
@@ -194,6 +221,43 @@ class YAML
         }
 
         return $result;
+    }
+
+    // -------------------------------------------------------------------------
+    // Plain scalar multi-ligne
+    // -------------------------------------------------------------------------
+
+    /**
+     * Collecte un scalaire qui peut continuer sur des lignes plus indentées que $parentIndent.
+     * Les lignes de continuation sont jointes par un espace (repli implicite).
+     */
+    private static function collectPlainScalar(array $lines, int &$pos, int $parentIndent, string $first): string
+    {
+        $parts = $first !== '' ? [trim($first)] : [];
+
+        while ($pos < count($lines)) {
+            $raw     = $lines[$pos];
+            $trimmed = trim($raw);
+
+            // Ligne vide : fin du scalaire
+            if ($trimmed === '') break;
+
+            $lineIndent = self::getIndent($raw);
+
+            // Retour à l'indentation parente ou moins : fin
+            if ($lineIndent <= $parentIndent) break;
+
+            // Commentaire seul sur la ligne : fin
+            if (str_starts_with($trimmed, '#')) break;
+
+            // C'est un mapping ou une séquence : fin
+            if (self::isMapping($trimmed) || str_starts_with($trimmed, '- ')) break;
+
+            $parts[] = $trimmed;
+            $pos++;
+        }
+
+        return implode(' ', $parts);
     }
 
     // -------------------------------------------------------------------------
